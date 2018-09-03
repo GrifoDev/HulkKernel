@@ -132,16 +132,17 @@ ENDPROC(cpu_do_resume)
  *	- pgd_phys - physical address of new TTB
  */
 ENTRY(cpu_do_switch_mm)
+	mrs	x2, ttbr1_el1
 	mmid	x1, x1				// get mm->context.id
-	bfi	x0, x1, #48, #16		// set the ASID
-	msr	ttbr0_el1, x0			// set TTBR0
+#ifdef CONFIG_ARM64_SW_TTBR0_PAN
+	bfi	x0, x1, #48, #16		// set the ASID field in TTBR0
+#endif
+	bfi	x2, x1, #48, #16		// set the ASID
+	msr	ttbr1_el1, x2			// in TTBR1 (since TCR.A1 is set)
 	isb
-alternative_if ARM64_WORKAROUND_CAVIUM_27456
-	ic	iallu
-	dsb	nsh
+	msr	ttbr0_el1, x0			// now update TTBR0
 	isb
-alternative_else_nop_endif
-	ret
+	b	post_ttbr_update_workaround
 ENDPROC(cpu_do_switch_mm)
 
 	.pushsection ".idmap.text", "ax"
@@ -202,12 +203,31 @@ ENTRY(__cpu_setup)
 	 *   NORMAL		100	11111111
 	 *   NORMAL_WT		101	10111011
 	 */
+#ifdef CONFIG_ARM64_ERRATUM_814818
+	mrs	x0, midr_el1
+	ldr	x1, =0x410fd050
+	cmp	x0, x1
+	b.eq	1f
+#endif
 	ldr	x5, =MAIR(0x00, MT_DEVICE_nGnRnE) | \
 		     MAIR(0x04, MT_DEVICE_nGnRE) | \
 		     MAIR(0x0c, MT_DEVICE_GRE) | \
 		     MAIR(0x44, MT_NORMAL_NC) | \
 		     MAIR(0xff, MT_NORMAL) | \
 		     MAIR(0xbb, MT_NORMAL_WT)
+#ifdef CONFIG_ARM64_ERRATUM_814818
+	b	2f
+1:
+#endif
+	ldr	x5, =MAIR(0x00, MT_DEVICE_nGnRnE) | \
+		     MAIR(0x04, MT_DEVICE_nGnRE) | \
+		     MAIR(0x0c, MT_DEVICE_GRE) | \
+		     MAIR(0x44, MT_NORMAL_NC) | \
+		     MAIR(0xef, MT_NORMAL) | \
+		     MAIR(0xab, MT_NORMAL_WT)
+#ifdef CONFIG_ARM64_ERRATUM_814818
+2:
+#endif
 	msr	mair_el1, x5
 	/*
 	 * Prepare SCTLR
@@ -222,7 +242,7 @@ ENTRY(__cpu_setup)
 	 * both user and kernel.
 	 */
 	ldr	x10, =TCR_TxSZ(VA_BITS) | TCR_CACHE_FLAGS | TCR_SMP_FLAGS | \
-			TCR_TG_FLAGS | TCR_ASID16 | TCR_TBI0
+			TCR_TG_FLAGS | TCR_ASID16 | TCR_TBI0 | TCR_A1
 	tcr_set_idmap_t0sz	x10, x9
 
 	/*
