@@ -277,14 +277,29 @@ static void sysrq_handler(struct xenbus_watch *watch, const char **vec,
 	err = xenbus_transaction_start(&xbt);
 	if (err)
 		return;
-	if (!xenbus_scanf(xbt, "control", "sysrq", "%c", &sysrq_key)) {
-		pr_err("Unable to read sysrq code in control/sysrq\n");
+	err = xenbus_scanf(xbt, "control", "sysrq", "%c", &sysrq_key);
+	if (err < 0) {
+		/*
+		 * The Xenstore watch fires directly after registering it and
+		 * after a suspend/resume cycle. So ENOENT is no error but
+		 * might happen in those cases.
+		 */
+		if (err != -ENOENT)
+			pr_err("Error %d reading sysrq code in control/sysrq\n",
+			       err);
 		xenbus_transaction_end(xbt, 1);
 		return;
 	}
 
-	if (sysrq_key != '\0')
-		xenbus_printf(xbt, "control", "sysrq", "%c", '\0');
+	if (sysrq_key != '\0') {
+		err = xenbus_printf(xbt, "control", "sysrq", "%c", '\0');
+		if (err) {
+			pr_err("%s: Error %d writing sysrq in control/sysrq\n",
+			       __func__, err);
+			xenbus_transaction_end(xbt, 1);
+			return;
+		}
+	}
 
 	err = xenbus_transaction_end(xbt, 0);
 	if (err == -EAGAIN)
@@ -336,7 +351,12 @@ static int setup_shutdown_watcher(void)
 			continue;
 		snprintf(node, FEATURE_PATH_SIZE, "feature-%s",
 			 shutdown_handlers[idx].command);
-		xenbus_printf(XBT_NIL, "control", node, "%u", 1);
+		err = xenbus_printf(XBT_NIL, "control", node, "%u", 1);
+		if (err) {
+			pr_err("%s: Error %d writing %s\n", __func__,
+				err, node);
+			return err;
+		}
 	}
 
 	return 0;

@@ -1190,6 +1190,8 @@ int pci_register_io_range(phys_addr_t addr, resource_size_t size);
 unsigned long pci_address_to_pio(phys_addr_t addr);
 phys_addr_t pci_pio_to_address(unsigned long pio);
 int pci_remap_iospace(const struct resource *res, phys_addr_t phys_addr);
+int devm_pci_remap_iospace(struct device *dev, const struct resource *res,
+			   phys_addr_t phys_addr);
 void pci_unmap_iospace(struct resource *res);
 
 static inline pci_bus_addr_t pci_bus_address(struct pci_dev *pdev, int bar)
@@ -1348,9 +1350,9 @@ static inline int pci_alloc_irq_vectors(struct pci_dev *dev,
 		unsigned int min_vecs, unsigned int max_vecs,
 		unsigned int flags)
 {
-	if (min_vecs > 1)
-		return -EINVAL;
-	return 1;
+	if ((flags & PCI_IRQ_LEGACY) && min_vecs == 1 && dev->irq)
+		return 1;
+	return -ENOSPC;
 }
 static inline void pci_free_irq_vectors(struct pci_dev *dev)
 {

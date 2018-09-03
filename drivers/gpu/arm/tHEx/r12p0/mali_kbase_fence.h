@@ -147,7 +147,7 @@ static inline int kbase_fence_out_signal(struct kbase_jd_atom *katom,
 	dma_fence_set_error(katom->dma_fence.fence, status);
 #endif
 #endif /* HACK MALI_SEC_INTEGRATION */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 68))
 	katom->dma_fence.fence->error = status;
 #else
 	katom->dma_fence.fence->status = status;
