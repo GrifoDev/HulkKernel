@@ -1259,6 +1259,7 @@ on boot
     chown system radio /sys/class/sec/sec_epen/epen_fac_select_firmware
     chown system system /sys/class/sec/sec_epen/abnormal_reset_count
     chown system system /sys/class/sec/sec_epen/i2c_fail_count
+    chown system system /sys/class/sec/sec_epen/pen_out_count
 
     # Key
     chown system radio /sys/class/sec/sec_key/wakeup_keys
